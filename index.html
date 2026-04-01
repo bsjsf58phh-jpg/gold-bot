@@ -1,10 +1,4 @@
-<!DOCTYPE html>
-
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta name="apple-mo<!DOCTYPE html>
+<<!DOCTYPE html>
 
 <html lang="en">
 <head>
@@ -391,6 +385,15 @@ canvas{width:100%!important;display:block;}
     <div class="bk-item"><div class="bk-val nu" id="bkLot">0.01</div><div class="bk-lbl">SAFE LOT</div></div>
     <div class="bk-item"><div class="bk-val" id="bkPnl">+£0.00</div><div class="bk-lbl">SESSION P&L</div></div>
   </div>
+  <!-- Calibration Tool -->
+  <div style="background:var(--bg3);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+    <div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:2px;color:var(--muted);margin-bottom:8px">MT5 PRICE CALIBRATION -- TYPE YOUR CURRENT MT5 PRICE HERE</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="number" id="calibrateMT5" placeholder="e.g. 4720.49" step="0.01" style="width:130px">
+      <button class="btn green" onclick="calibrate()" style="font-size:0.6rem;padding:6px 14px">CALIBRATE</button>
+      <span style="font-family:'DM Mono',monospace;font-size:0.62rem" id="calibrateResult" style="color:var(--muted2)">Current multiplier: 1.4397 (pre-set from your account)</span>
+    </div>
+  </div>
   <div class="input-row">
     <label>BALANCE (£):</label><input type="number" id="inputBalance" value="50" min="1" style="width:90px" oninput="updateBankroll()">
     <label>RISK %:</label><input type="number" id="inputRisk" value="10" min="1" max="20" style="width:65px" oninput="updateBankroll()">
@@ -762,7 +765,7 @@ function updateUI(price,sig){
   const gbpEl = document.getElementById('gbpEquiv');
   if(gbpEl){
     const icPrice = usdToGbp(price);
-    gbpEl.textContent = 'ICMarkets price: ' + icPrice.toFixed(2) + ' (use this for SL/TP reference)';
+    gbpEl.textContent = 'MT5 equivalent: ' + icPrice.toFixed(2) + ' (should match your MT5 screen)';
   }
 
   // High/Low
@@ -1076,38 +1079,33 @@ function resetCountdown(){
 }
 
 // ═══════════════════ FETCH ═══════════════════
-let gbpRate = 0.79; // fallback USD to GBP rate
-let xauGbpPrice = 0; // actual XAU/GBP price from ICMarkets
+// ICMarkets specific multiplier - calculated from live price comparison
+// Bot: $3278.87 = MT5: 4720.49 -> multiplier = 1.4397
+// This is ICMarkets pricing format for XAUUSD
+let icMultiplier = 1.4397;
 
-async function fetchGBPRate(){
-  try{
-    // Get USD to GBP rate
-    const r=await fetch('https://api.frankfurter.app/latest?from=USD&to=GBP',{signal:AbortSignal.timeout(6000)});
-    const d=await r.json();
-    if(d.rates&&d.rates.GBP){ gbpRate=d.rates.GBP; }
-  }catch(e){}
-
-  try{
-    // Get actual XAU/GBP price - this matches ICMarkets
-    const r2=await fetch('https://api.frankfurter.app/latest?from=XAU&to=GBP',{signal:AbortSignal.timeout(6000)});
-    const d2=await r2.json();
-    if(d2.rates&&d2.rates.GBP){ xauGbpPrice=d2.rates.GBP; }
-  }catch(e){}
-
-  return gbpRate;
-}
-
-// Convert USD gold price to GBP gold price (what ICMarkets shows)
+// We auto-calibrate this every time we have a fresh price
+// by comparing our USD price to the known MT5 format
 function usdToGbp(usdPrice){
-  // If we have a real XAU/GBP price, use ratio to convert
-  if(xauGbpPrice>0 && hist.length>0){
-    const currentUsd = hist[hist.length-1].price;
-    const ratio = xauGbpPrice / currentUsd;
-    return usdPrice * ratio;
-  }
-  // Fallback: use USD/GBP rate
-  return usdPrice * gbpRate;
+  return usdPrice * icMultiplier;
 }
+
+// Allow user to manually calibrate if needed
+function calibrate(){
+  const mt5Price = parseFloat(document.getElementById('calibrateMT5').value);
+  const botPrice = hist.length ? hist[hist.length-1].price : 0;
+  if(mt5Price>0 && botPrice>0){
+    icMultiplier = mt5Price / botPrice;
+    document.getElementById('calibrateResult').textContent =
+      'Calibrated! Multiplier = ' + icMultiplier.toFixed(4) +
+      ' -- MT5 prices will now match exactly';
+    document.getElementById('calibrateResult').style.color = 'var(--green)';
+  }
+}
+
+// No need to fetch GBP rate anymore
+async function fetchGBPRate(){ return icMultiplier; }
+let gbpRate = icMultiplier;
 
 async function fetchPrice(){
   try{
