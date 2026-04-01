@@ -20,7 +20,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 html{scroll-behavior:smooth;}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;-webkit-text-size-adjust:100%;}
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 800px 400px at 50% -100px,rgba(245,200,66,0.06) 0%,transparent 70%),radial-gradient(ellipse 400px 400px at 100% 50%,rgba(0,176,255,0.03) 0%,transparent 60%);pointer-events:none;z-index:0;}
 .wrap{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:16px;}
 
@@ -276,7 +276,7 @@ canvas{width:100%!important;display:block;}
     <div class="mt5-box"><div class="mt5-lbl">CURRENT GBP PRICE</div><div class="mt5-val" style="color:var(--gold)" id="mt5Current">--</div></div>
     <div class="mt5-box"><div class="mt5-lbl">USD/GBP RATE</div><div class="mt5-val" style="color:var(--blue)" id="mt5Rate">--</div></div>
     <div class="mt5-box"><div class="mt5-lbl">SL DISTANCE</div><div class="mt5-val" style="color:var(--red)" id="mt5SLDist">--</div></div>
-    <div class="mt5-box"><div class="mt5-lbl">TP DISTANCE</div><div class="mt5-val" style="color:var(--green)" id="mt5TPDist">--</div></div
+    <div class="mt5-box"><div class="mt5-lbl">TP DISTANCE</div><div class="mt5-val" style="color:var(--green)" id="mt5TPDist">--</div></div>
   </div>
   <div class="mt5-steps">
     <strong>1.</strong> Open MT5 on your phone -- tap XAUUSD -- tap <strong>TRADE</strong><br>
