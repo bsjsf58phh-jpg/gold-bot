@@ -265,12 +265,18 @@ canvas{width:100%!important;display:block;}
 <!-- MT5 QUICK PANEL -->
 
 <div class="mt5-panel" id="mt5Panel">
-  <div class="mt5-title">MT5 QUICK TRADE PANEL -- OPEN MT5 NOW</div>
+  <div class="mt5-title">MT5 QUICK TRADE PANEL -- ICMARKETS GBP VALUES -- COPY THESE EXACTLY</div>
   <div class="mt5-grid">
     <div class="mt5-box"><div class="mt5-lbl">DIRECTION</div><div class="mt5-val" id="mt5Dir">--</div></div>
     <div class="mt5-box"><div class="mt5-lbl">VOLUME (LOT)</div><div class="mt5-val" style="color:var(--gold)" id="mt5Lot">0.01</div></div>
-    <div class="mt5-box"><div class="mt5-lbl">STOP LOSS</div><div class="mt5-val" style="color:var(--red)" id="mt5SL">--</div></div>
-    <div class="mt5-box"><div class="mt5-lbl">TAKE PROFIT</div><div class="mt5-val" style="color:var(--green)" id="mt5TP">--</div></div>
+    <div class="mt5-box"><div class="mt5-lbl">STOP LOSS (GBP)</div><div class="mt5-val" style="color:var(--red)" id="mt5SL">--</div></div>
+    <div class="mt5-box"><div class="mt5-lbl">TAKE PROFIT (GBP)</div><div class="mt5-val" style="color:var(--green)" id="mt5TP">--</div></div>
+  </div>
+  <div class="mt5-grid" style="margin-bottom:14px">
+    <div class="mt5-box"><div class="mt5-lbl">CURRENT GBP PRICE</div><div class="mt5-val" style="color:var(--gold)" id="mt5Current">--</div></div>
+    <div class="mt5-box"><div class="mt5-lbl">USD/GBP RATE</div><div class="mt5-val" style="color:var(--blue)" id="mt5Rate">--</div></div>
+    <div class="mt5-box"><div class="mt5-lbl">SL DISTANCE</div><div class="mt5-val" style="color:var(--red)" id="mt5SLDist">--</div></div>
+    <div class="mt5-box"><div class="mt5-lbl">TP DISTANCE</div><div class="mt5-val" style="color:var(--green)" id="mt5TPDist">--</div></div
   </div>
   <div class="mt5-steps">
     <strong>1.</strong> Open MT5 on your phone -- tap XAUUSD -- tap <strong>TRADE</strong><br>
@@ -289,6 +295,7 @@ canvas{width:100%!important;display:block;}
     <div class="stat-label">SPOT PRICE -- XAU/USD</div>
     <div class="stat-val big" id="price">--</div>
     <div class="stat-sub"><span id="priceChange">--</span><span id="pricePct">--</span><span style="color:var(--muted);margin-left:auto;font-size:0.58rem" id="lastUpdate">--</span></div>
+    <div style="font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--muted2);margin-top:3px"><span id="gbpEquiv" style="color:var(--gold)">--</span> <span style="color:var(--muted)">(ICMarkets equivalent)</span></div>
     <div class="countdown-bar"><div class="countdown-fill" id="cdFill" style="width:100%"></div></div>
   </div>
   <div class="stat-card">
@@ -743,6 +750,10 @@ function updateUI(price,sig){
     document.getElementById('pricePct').textContent=(d>=0?'+':'')+p.toFixed(3)+'%';
   }
   document.getElementById('lastUpdate').textContent='Updated '+new Date().toLocaleTimeString();
+  // Show GBP equivalent in price subline
+  const gbpEquiv = usdToGbp(price);
+  const gbpEl = document.getElementById('gbpEquiv');
+  if(gbpEl) gbpEl.textContent = 'GBP equiv: ' + gbpEquiv.toFixed(2);
 
   // High/Low
   const prices=hist.map(h=>h.price);
@@ -878,8 +889,20 @@ function updateUI(price,sig){
     const dEl=document.getElementById('mt5Dir');
     dEl.textContent=sig.action; dEl.style.color=sig.action==='BUY'?'var(--green)':'var(--red)';
     document.getElementById('mt5Lot').textContent=lot;
-    document.getElementById('mt5SL').textContent=lv.sl?lv.sl.toFixed(2):'--';
-    document.getElementById('mt5TP').textContent=lv.tp1?lv.tp1.toFixed(2):'--';
+
+    // Convert USD prices to GBP for ICMarkets
+    const gbpEntry = usdToGbp(lv.entry);
+    const gbpSL = lv.sl ? usdToGbp(lv.sl) : null;
+    const gbpTP1 = lv.tp1 ? usdToGbp(lv.tp1) : null;
+    const slDist = lv.sl ? Math.abs(lv.entry - lv.sl).toFixed(1) : '--';
+    const tpDist = lv.tp1 ? Math.abs(lv.tp1 - lv.entry).toFixed(1) : '--';
+
+    document.getElementById('mt5SL').textContent=gbpSL?gbpSL.toFixed(2):'--';
+    document.getElementById('mt5TP').textContent=gbpTP1?gbpTP1.toFixed(2):'--';
+    document.getElementById('mt5Current').textContent=gbpEntry.toFixed(2);
+    document.getElementById('mt5Rate').textContent=gbpRate.toFixed(4);
+    document.getElementById('mt5SLDist').textContent=slDist+' pts';
+    document.getElementById('mt5TPDist').textContent=tpDist+' pts';
     document.getElementById('mt5BtnText').textContent=sig.action;
     document.getElementById('mt5BtnText').style.color=sig.action==='BUY'?'var(--green)':'var(--red)';
   }
@@ -1038,6 +1061,18 @@ function resetCountdown(){
 }
 
 // ═══════════════════ FETCH ═══════════════════
+let gbpRate = 0.79; // fallback USD to GBP rate
+async function fetchGBPRate(){
+  try{
+    const r=await fetch('https://api.frankfurter.app/latest?from=USD&to=GBP',{signal:AbortSignal.timeout(6000)});
+    const d=await r.json();
+    if(d.rates&&d.rates.GBP){ gbpRate=d.rates.GBP; return gbpRate; }
+  }catch(e){}
+  return gbpRate;
+}
+
+function usdToGbp(usdPrice){ return usdPrice * gbpRate; }
+
 async function fetchPrice(){
   try{
     const r=await fetch('https://api.frankfurter.app/latest?from=XAU&to=USD',{signal:AbortSignal.timeout(6000)});
@@ -1072,6 +1107,8 @@ if(/iPhone|iPad|iPod/.test(navigator.userAgent)&&!navigator.standalone){
   document.getElementById('pwaCard').style.display='block';
 }
 
+fetchGBPRate();
+setInterval(fetchGBPRate, 300000); // refresh rate every 5 mins
 startLoop();
 window.addEventListener('resize',drawChart);
 </script>
