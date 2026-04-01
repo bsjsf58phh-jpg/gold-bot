@@ -4,6 +4,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mo<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="XAU BOT">
@@ -279,12 +285,13 @@ canvas{width:100%!important;display:block;}
     <div class="mt5-box"><div class="mt5-lbl">TP DISTANCE</div><div class="mt5-val" style="color:var(--green)" id="mt5TPDist">--</div></div>
   </div>
   <div class="mt5-steps">
-    <strong>1.</strong> Open MT5 on your phone -- tap XAUUSD -- tap <strong>TRADE</strong><br>
-    <strong>2.</strong> Set <strong>Volume</strong> to the LOT number above<br>
-    <strong>3.</strong> Tap <strong>Stop Loss</strong> and type the SL number above<br>
-    <strong>4.</strong> Tap <strong>Take Profit</strong> and type the TP number above<br>
-    <strong>5.</strong> Tap the big <strong id="mt5BtnText" style="color:var(--green)">BUY</strong> button to confirm -- you are in!<br>
-    <strong>6.</strong> Watch the trade -- when bot signals opposite direction, close it for profit!
+    <strong style="color:var(--gold)">FOLLOW THESE EXACT STEPS:</strong><br>
+    <strong>1.</strong> Open MT5 -- tap XAUUSD -- tap <strong>TRADE</strong><br>
+    <strong>2.</strong> Volume box: type <strong id="mt5StepLot" style="color:var(--gold)">0.01</strong><br>
+    <strong>3.</strong> Stop Loss box: type <strong id="mt5StepSL" style="color:var(--red)">--</strong> (protects your money)<br>
+    <strong>4.</strong> Take Profit box: type <strong id="mt5StepTP" style="color:var(--green)">--</strong> (your profit target)<br>
+    <strong>5.</strong> Tap the big <strong id="mt5BtnText" style="color:var(--green)">BUY</strong> button<br>
+    <strong>6.</strong> Done! Watch your trade open at around <strong id="mt5StepEntry" style="color:var(--gold)">--</strong>
   </div>
 </div>
 
@@ -753,7 +760,10 @@ function updateUI(price,sig){
   // Show GBP equivalent in price subline
   const gbpEquiv = usdToGbp(price);
   const gbpEl = document.getElementById('gbpEquiv');
-  if(gbpEl) gbpEl.textContent = 'GBP equiv: ' + gbpEquiv.toFixed(2);
+  if(gbpEl){
+    const icPrice = usdToGbp(price);
+    gbpEl.textContent = 'ICMarkets price: ' + icPrice.toFixed(2) + ' (use this for SL/TP reference)';
+  }
 
   // High/Low
   const prices=hist.map(h=>h.price);
@@ -905,6 +915,11 @@ function updateUI(price,sig){
     document.getElementById('mt5TPDist').textContent=tpDist+' pts';
     document.getElementById('mt5BtnText').textContent=sig.action;
     document.getElementById('mt5BtnText').style.color=sig.action==='BUY'?'var(--green)':'var(--red)';
+    // Update the step-by-step values too
+    document.getElementById('mt5StepLot').textContent=lot;
+    document.getElementById('mt5StepSL').textContent=gbpSL?gbpSL.toFixed(2):'--';
+    document.getElementById('mt5StepTP').textContent=gbpTP1?gbpTP1.toFixed(2):'--';
+    document.getElementById('mt5StepEntry').textContent=gbpEntry.toFixed(2);
   }
 
   // Stats
@@ -1062,16 +1077,37 @@ function resetCountdown(){
 
 // ═══════════════════ FETCH ═══════════════════
 let gbpRate = 0.79; // fallback USD to GBP rate
+let xauGbpPrice = 0; // actual XAU/GBP price from ICMarkets
+
 async function fetchGBPRate(){
   try{
+    // Get USD to GBP rate
     const r=await fetch('https://api.frankfurter.app/latest?from=USD&to=GBP',{signal:AbortSignal.timeout(6000)});
     const d=await r.json();
-    if(d.rates&&d.rates.GBP){ gbpRate=d.rates.GBP; return gbpRate; }
+    if(d.rates&&d.rates.GBP){ gbpRate=d.rates.GBP; }
   }catch(e){}
+
+  try{
+    // Get actual XAU/GBP price - this matches ICMarkets
+    const r2=await fetch('https://api.frankfurter.app/latest?from=XAU&to=GBP',{signal:AbortSignal.timeout(6000)});
+    const d2=await r2.json();
+    if(d2.rates&&d2.rates.GBP){ xauGbpPrice=d2.rates.GBP; }
+  }catch(e){}
+
   return gbpRate;
 }
 
-function usdToGbp(usdPrice){ return usdPrice * gbpRate; }
+// Convert USD gold price to GBP gold price (what ICMarkets shows)
+function usdToGbp(usdPrice){
+  // If we have a real XAU/GBP price, use ratio to convert
+  if(xauGbpPrice>0 && hist.length>0){
+    const currentUsd = hist[hist.length-1].price;
+    const ratio = xauGbpPrice / currentUsd;
+    return usdPrice * ratio;
+  }
+  // Fallback: use USD/GBP rate
+  return usdPrice * gbpRate;
+}
 
 async function fetchPrice(){
   try{
