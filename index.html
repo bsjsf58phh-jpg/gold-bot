@@ -632,8 +632,10 @@ padding:16px; border-top:1px solid var(–border2);
     <input type="number" id="minConf" value="55" min="0" max="100" style="width:70px"/>
     <label>UPDATE:</label>
     <select id="updateInt">
+      <option value="2000" selected>2 sec ⚡</option>
+      <option value="5000">5 sec</option>
       <option value="10000">10 sec</option>
-      <option value="30000" selected>30 sec</option>
+      <option value="30000">30 sec</option>
       <option value="60000">1 min</option>
     </select>
     <button class="btn ghost" onclick="startLoop()">APPLY</button>
@@ -926,12 +928,13 @@ function updateUI(price, sig) {
 
   // Reasons
   const rl=document.getElementById('reasonsList');
-  rl.innerHTML=(sig.reasons||[]).slice(0,4).map(r=>
+  const validReasons=(sig.reasons||[]).filter(r=>r&&r.t&&r.t!=='undefined');
+  rl.innerHTML=validReasons.slice(0,4).map(r=>
     `<div class="reason-item">
       <span class="bullet">◆</span>
       <span style="color:${r.s==='BUY'?'var(--green)':r.s==='SELL'?'var(--red)':'var(--muted2)'}">${r.t}</span>
     </div>`
-  ).join('') || '<div class="reason-item"><span class="bullet">◆</span><span>Accumulating data...</span></div>';
+  ).join('') || '<div class="reason-item"><span class="bullet">◆</span><span>Accumulating data — please wait...</span></div>';
 
   // Indicators
   const ind=sig.ind;
