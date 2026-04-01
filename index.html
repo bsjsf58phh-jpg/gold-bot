@@ -415,14 +415,48 @@ padding:16px; border-top:1px solid var(–border2);
   </div>
 </header>
 
-<!-- Warning -->
+<!-- Warning Banners -->
 
 <div class="warn-banner" id="warnBanner" style="display:none">
-  ⚠ HIGH IMPACT NEWS EVENT DETECTED — Signals may be unreliable. Consider waiting until after the announcement.
+  HIGH IMPACT NEWS EVENT -- Signals may be unreliable. Consider waiting.
 </div>
-
+<div class="warn-banner" id="dangerBanner" style="display:none;background:rgba(255,23,68,0.12);border-color:rgba(255,23,68,0.35);color:#ff6b6b">
+  DANGER ZONE -- Stochastic extreme. High reversal risk. DO NOT TRADE until this clears.
+</div>
+<div class="warn-banner" id="dailyLossBanner" style="display:none;background:rgba(255,23,68,0.15);border-color:rgba(255,23,68,0.4);color:#ff4444">
+  DAILY LOSS LIMIT REACHED -- Bot signals paused to protect your balance. Come back tomorrow.
+</div>
+<div id="gradeBanner" style="display:none;border-radius:12px;padding:12px 20px;margin-bottom:14px;font-family:DM Mono,monospace;font-size:0.75rem;letter-spacing:1px"></div>
+<div id="mt5Panel" style="display:none;background:rgba(0,230,118,0.06);border:2px solid var(--green);border-radius:16px;padding:20px 24px;margin-bottom:14px;">
+  <div style="font-family:DM Mono,monospace;font-size:0.6rem;letter-spacing:3px;color:var(--green);margin-bottom:14px">MT5 QUICK TRADE PANEL -- OPEN MT5 NOW AND ENTER THESE EXACT VALUES</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+    <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-family:DM Mono,monospace;font-size:0.55rem;color:var(--muted);margin-bottom:6px">DIRECTION</div>
+      <div style="font-family:Bebas Neue,sans-serif;font-size:1.8rem" id="mt5Dir">--</div>
+    </div>
+    <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-family:DM Mono,monospace;font-size:0.55rem;color:var(--muted);margin-bottom:6px">VOLUME (LOT)</div>
+      <div style="font-family:Bebas Neue,sans-serif;font-size:1.8rem;color:var(--gold)" id="mt5Lot">0.01</div>
+    </div>
+    <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-family:DM Mono,monospace;font-size:0.55rem;color:var(--muted);margin-bottom:6px">STOP LOSS</div>
+      <div style="font-family:Bebas Neue,sans-serif;font-size:1.5rem;color:var(--red)" id="mt5SL">--</div>
+    </div>
+    <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-family:DM Mono,monospace;font-size:0.55rem;color:var(--muted);margin-bottom:6px">TAKE PROFIT</div>
+      <div style="font-family:Bebas Neue,sans-serif;font-size:1.5rem;color:var(--green)" id="mt5TP">--</div>
+    </div>
+  </div>
+  <div style="font-family:DM Mono,monospace;font-size:0.68rem;color:var(--muted2);line-height:2.2">
+    Step 1: Open MT5 and find XAUUSD, tap it, tap TRADE<br>
+    Step 2: Set Volume to the LOT number above<br>
+    Step 3: Set Stop Loss to the SL number above<br>
+    Step 4: Set Take Profit to the TP number above<br>
+    Step 5: Tap the big BUY or SELL button (whichever DIRECTION says)<br>
+    Step 6: Confirm -- you are in the trade!
+  </div>
+</div>
 <!-- Stats Row -->
-
 <div class="stats-row">
   <div class="stat-card">
     <div class="stat-label">SPOT PRICE · XAU/USD</div>
@@ -660,6 +694,10 @@ let loopId = null;
 let notifGranted = false;
 let lastSignal = null;
 let stats = { BUY:0, SELL:0, HOLD:0, strong:0 };
+let confirmBuffer = []; // holds last 3 signals for confirmation
+let dailyLoss = 0;
+const DAILY_LOSS_LIMIT = 10; // stop signalling if lost more than this (£)
+let signalGrade = '';
 
 // ═══════════════════════════════════════════════════
 // CLOCK + SESSIONS
@@ -868,7 +906,21 @@ function generateSignal(prices, cur) {
     sl=null; tp1=null; tp2=null;
   }
 
-  return { action, confidence, reasons,
+  // Signal Grade
+  let grade = 'C';
+  if (confidence >= 80) grade = 'A';
+  else if (confidence >= 65) grade = 'B';
+
+  // Danger zone — stochastic extreme, override to HOLD
+  const danger = S > 85 || S < 15;
+
+  // Require 4+ indicator agreement for BUY/SELL
+  const buyIndicators = [R<45, e9&&e21&&e9>e21, M&&M>0, B&&cur<B.mean, MOM>0, S<50].filter(Boolean).length;
+  const sellIndicators = [R>55, e9&&e21&&e9<e21, M&&M<0, B&&cur>B.mean, MOM<0, S>50].filter(Boolean).length;
+  const goodAgreement = (action==='BUY'&&buyIndicators>=4) || (action==='SELL'&&sellIndicators>=4) || action==='HOLD';
+  if (!goodAgreement) { action='HOLD'; confidence=Math.min(confidence,45); }
+
+  return { action, confidence, reasons, grade, danger,
     ind:{rsi:R,ema9:e9,ema21:e21,macd:M,bb:B,mom:MOM,stoch:S},
     levels:{entry:cur, sl, tp1, tp2, rr: tp1 ? (tp1Pips/slPips).toFixed(1) : null}
   };
@@ -907,15 +959,55 @@ function updateUI(price, sig) {
   }
   document.getElementById('spread').textContent=(Math.random()*0.3+0.2).toFixed(2);
 
+  // Safety checks
+  const dailyBal = parseFloat(document.getElementById('inputBalance').value)||50;
+  document.getElementById('dailyLossBanner').style.display = dailyLoss >= DAILY_LOSS_LIMIT ? 'block' : 'none';
+  document.getElementById('dangerBanner').style.display = sig.danger ? 'block' : 'none';
+
+  // Signal confirmation — need same signal 3 times in a row
+  confirmBuffer.push(sig.action);
+  if (confirmBuffer.length > 3) confirmBuffer.shift();
+  const confirmed = confirmBuffer.length===3 && confirmBuffer.every(s=>s===sig.action);
+  const displayAction = (confirmed || sig.action==='HOLD') ? sig.action : 'HOLD';
+  const displayConf = confirmed ? sig.confidence : Math.min(sig.confidence, 40);
+
+  // Grade banner
+  const gb = document.getElementById('gradeBanner');
+  if (displayAction !== 'HOLD') {
+    const gradeColors = { A:'rgba(0,230,118,0.12)', B:'rgba(245,200,66,0.1)', C:'rgba(255,100,0,0.1)' };
+    const gradeBorders = { A:'rgba(0,230,118,0.4)', B:'rgba(245,200,66,0.3)', C:'rgba(255,100,0,0.3)' };
+    const gradeText = { A:'A GRADE SIGNAL -- Strong setup, all indicators agree. Good to trade.', B:'B GRADE SIGNAL -- Decent setup. Trade with caution, smaller size.', C:'C GRADE SIGNAL -- Weak setup. Consider skipping this one.' };
+    gb.style.display='block';
+    gb.style.background=gradeColors[sig.grade];
+    gb.style.border='1px solid '+gradeBorders[sig.grade];
+    gb.style.color=sig.grade==='A'?'var(--green)':sig.grade==='B'?'var(--gold)':'#ff7043';
+    gb.textContent = 'SIGNAL GRADE: ' + sig.grade + ' -- ' + gradeText[sig.grade];
+  } else {
+    gb.style.display='none';
+  }
+
+  // MT5 panel — only show for confirmed non-HOLD signals
+  const mt5 = document.getElementById('mt5Panel');
+  const showMT5 = displayAction !== 'HOLD' && confirmed && !sig.danger && displayConf >= 60 && dailyLoss < DAILY_LOSS_LIMIT;
+  mt5.style.display = showMT5 ? 'block' : 'none';
+  if (showMT5 && sig.levels) {
+    const lot = document.getElementById('bkLot').textContent || '0.01';
+    const dirEl = document.getElementById('mt5Dir');
+    dirEl.textContent = displayAction;
+    dirEl.style.color = displayAction==='BUY' ? 'var(--green)' : 'var(--red)';
+    document.getElementById('mt5Lot').textContent = lot;
+    document.getElementById('mt5SL').textContent = sig.levels.sl ? sig.levels.sl.toFixed(2) : '--';
+    document.getElementById('mt5TP').textContent = sig.levels.tp1 ? sig.levels.tp1.toFixed(2) : '--';
+  }
+
   // Signal card
   const card=document.getElementById('signalCard');
-  card.className='signal-card '+sig.action;
-  document.getElementById('sigAction').textContent=sig.action;
-  document.getElementById('confPct').textContent=sig.confidence+'%';
-  document.getElementById('confFill').style.width=sig.confidence+'%';
-  document.getElementById('sigTime').textContent=
-    '@ '+new Date().toLocaleTimeString()+' · '+
-    (sig.action!=='HOLD'?'STRONG SIGNAL':'WAITING FOR SETUP');
+  card.className='signal-card '+displayAction;
+  document.getElementById('sigAction').textContent = displayAction;
+  document.getElementById('confPct').textContent = displayConf+'%';
+  document.getElementById('confFill').style.width = displayConf+'%';
+  const confMsg = !confirmed && sig.action!=='HOLD' ? 'CONFIRMING SIGNAL ('+confirmBuffer.length+'/3)...' : displayAction!=='HOLD' ? 'CONFIRMED -- TRADE NOW' : 'WAITING FOR SETUP';
+  document.getElementById('sigTime').textContent = '@ '+new Date().toLocaleTimeString()+' -- '+confMsg;
 
   // Levels
   if (sig.levels) {
