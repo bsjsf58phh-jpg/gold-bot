@@ -920,11 +920,28 @@ startCountdown();
 }
 
 async function fetchPrice(){
+// Source 1: frankfurter
 try{
-var r=await fetch(‘https://api.frankfurter.app/latest?from=XAU&to=USD’,{signal:AbortSignal.timeout(7000)});
-if(!r.ok)throw new Error(’HTTP ’+r.status);
-var d=await r.json();
-if(d&&d.rates&&typeof d.rates.USD===‘number’)return d.rates.USD;
+var r=await fetch(‘https://api.frankfurter.app/latest?from=XAU&to=USD’,{signal:AbortSignal.timeout(6000)});
+if(r.ok){var d=await r.json();if(d&&d.rates&&typeof d.rates.USD===‘number’)return d.rates.USD;}
+}catch(e){}
+// Source 2: metals-api via allorigins proxy
+try{
+var url=‘https://api.allorigins.win/get?url=’+encodeURIComponent(‘https://metals-api.com/api/latest?access_key=demo&base=XAU&symbols=USD’);
+var r2=await fetch(url,{signal:AbortSignal.timeout(6000)});
+if(r2.ok){var d2=await r2.json();var j=JSON.parse(d2.contents);if(j&&j.rates&&j.rates.USD)return j.rates.USD;}
+}catch(e){}
+// Source 3: open exchange rates via allorigins
+try{
+var url3=‘https://api.allorigins.win/get?url=’+encodeURIComponent(‘https://open.er-api.com/v6/latest/XAU’);
+var r3=await fetch(url3,{signal:AbortSignal.timeout(6000)});
+if(r3.ok){var d3=await r3.json();var j3=JSON.parse(d3.contents);if(j3&&j3.rates&&j3.rates.USD)return j3.rates.USD;}
+}catch(e){}
+// Source 4: gold-api via allorigins
+try{
+var url4=‘https://api.allorigins.win/get?url=’+encodeURIComponent(‘https://www.goldapi.io/api/XAU/USD’);
+var r4=await fetch(url4,{signal:AbortSignal.timeout(6000)});
+if(r4.ok){var d4=await r4.json();var j4=JSON.parse(d4.contents);if(j4&&j4.price)return j4.price;}
 }catch(e){}
 return null;
 }
